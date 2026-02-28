@@ -1,0 +1,4 @@
+{
+  // HTTP server port
+  "port": 3000
+}
