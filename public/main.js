@@ -83,7 +83,7 @@ function hideDemoUi() {
 
 // UIヘルパ
 function setBusy(b) {
-  document.querySelectorAll("button, select").forEach((el) => {
+  document.querySelectorAll("button, select, input[type='range']").forEach((el) => {
     el.disabled = b;
   });
   spinner.classList.toggle("loading", b);
@@ -184,12 +184,12 @@ function createAirconControl(aircon) {
   formRow.className = "row g-2";
 
   const modeSelect = createSelectControl("運転モード", "bi-sliders", Object.keys(aircon.modes), aircon.defaultParams.mode);
-  const tempSelect = createSelectControl("温度", "bi-thermometer-half", [], aircon.defaultParams.temp);
-  const volSelect = createSelectControl("風量", "bi-fan", [], aircon.defaultParams.vol);
+  const tempControl = createTemperatureControl("温度", "bi-thermometer-half", aircon.defaultParams.temp);
+  const volSelect = createSelectControl("風量", "bi-fan", [], aircon.defaultParams.vol, formatAirVolumeLabel);
   const dirSelect = createSelectControl("風向", "bi-arrow-down-up", [], aircon.defaultParams.dir);
 
   formRow.appendChild(modeSelect.group);
-  formRow.appendChild(tempSelect.group);
+  formRow.appendChild(tempControl.group);
   formRow.appendChild(volSelect.group);
   formRow.appendChild(dirSelect.group);
 
@@ -198,8 +198,8 @@ function createAirconControl(aircon) {
   const refreshOptions = () => {
     const mode = modeSelect.select.value;
     const modeInfo = aircon.modes[mode] ?? {};
-    setSelectOptions(tempSelect.select, modeInfo.temps ?? [], aircon.defaultParams.temp);
-    setSelectOptions(volSelect.select, modeInfo.vols ?? [], aircon.defaultParams.vol);
+    setTemperatureOptions(tempControl, modeInfo.temps ?? [], aircon.defaultParams.temp);
+    setSelectOptions(volSelect.select, modeInfo.vols ?? [], aircon.defaultParams.vol, formatAirVolumeLabel);
     setSelectOptions(dirSelect.select, modeInfo.dirs ?? [], aircon.defaultParams.dir);
   };
 
@@ -213,7 +213,7 @@ function createAirconControl(aircon) {
   applyBtn.addEventListener("click", withSpinner(async () => {
     await aircon.update({
       mode: modeSelect.select.value,
-      temp: readOptionalValue(tempSelect.select.value),
+      temp: tempControl.getValue(),
       vol: readOptionalValue(volSelect.select.value),
       dir: readOptionalValue(dirSelect.select.value),
       tempUnit: aircon.defaultParams.tempUnit,
@@ -234,7 +234,7 @@ function createQuickActionButton(label, iconClass, action) {
   return btn;
 }
 
-function createSelectControl(label, iconClass, options, selected) {
+function createSelectControl(label, iconClass, options, selected, formatter = formatDefaultOptionLabel) {
   const group = document.createElement("div");
   group.className = "col-12 col-md-6 col-lg-3";
 
@@ -248,12 +248,85 @@ function createSelectControl(label, iconClass, options, selected) {
   group.appendChild(lbl);
   group.appendChild(select);
 
-  setSelectOptions(select, options, selected);
+  setSelectOptions(select, options, selected, formatter);
 
   return { group, select };
 }
 
-function setSelectOptions(select, values, selected) {
+function createTemperatureControl(label, iconClass, selected) {
+  const group = document.createElement("div");
+  group.className = "col-12 col-md-6 col-lg-3";
+
+  const lbl = document.createElement("label");
+  lbl.className = "form-label mb-1";
+  lbl.innerHTML = `<i class="bi ${iconClass} me-1"></i>${escapeHtml(label)} <span class="badge text-bg-light" data-temp-value>-</span>`;
+
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.className = "form-range";
+
+  const select = document.createElement("select");
+  select.className = "form-select d-none";
+
+  const updateBadge = (value) => {
+    const badge = lbl.querySelector("[data-temp-value]");
+    badge.textContent = value ? `${value}℃` : "未対応";
+  };
+
+  slider.addEventListener("input", () => {
+    updateBadge(slider.value);
+  });
+  select.addEventListener("change", () => {
+    updateBadge(select.value);
+  });
+
+  group.appendChild(lbl);
+  group.appendChild(slider);
+  group.appendChild(select);
+
+  return {
+    group,
+    slider,
+    select,
+    selected,
+    updateBadge,
+    getValue() {
+      if (!slider.classList.contains("d-none")) {
+        return readOptionalValue(slider.value);
+      }
+      return readOptionalValue(select.value);
+    },
+  };
+}
+
+function setTemperatureOptions(control, values, selected) {
+  const numericValues = values
+    .map((v) => Number(v))
+    .filter((v) => !Number.isNaN(v));
+
+  if (numericValues.length > 0) {
+    const min = Math.min(...numericValues);
+    const max = Math.max(...numericValues);
+    const sorted = [...new Set(numericValues)].sort((a, b) => a - b);
+    const defaultValue = sorted.includes(Number(selected)) ? Number(selected) : sorted[0];
+
+    control.slider.min = String(min);
+    control.slider.max = String(max);
+    control.slider.step = "1";
+    control.slider.value = String(defaultValue);
+    control.slider.classList.remove("d-none");
+    control.select.classList.add("d-none");
+    control.updateBadge(String(defaultValue));
+    return;
+  }
+
+  control.slider.classList.add("d-none");
+  control.select.classList.remove("d-none");
+  setSelectOptions(control.select, values, selected);
+  control.updateBadge(control.select.value);
+}
+
+function setSelectOptions(select, values, selected, formatter = formatDefaultOptionLabel) {
   select.innerHTML = "";
   if (!values || values.length === 0) {
     const opt = document.createElement("option");
@@ -267,7 +340,7 @@ function setSelectOptions(select, values, selected) {
     const stringValue = String(value);
     const opt = document.createElement("option");
     opt.value = stringValue;
-    opt.textContent = stringValue;
+    opt.textContent = formatter(stringValue);
     if (selected !== undefined && selected !== null && String(selected) === stringValue) {
       opt.selected = true;
     }
@@ -277,6 +350,25 @@ function setSelectOptions(select, values, selected) {
   if (!select.value) {
     select.value = String(values[0]);
   }
+}
+
+function formatAirVolumeLabel(value) {
+  if (value === "auto") {
+    return "自動";
+  }
+
+  const volumeMap = {
+    "1": "弱",
+    "2": "中",
+    "3": "強",
+    "4": "最大",
+  };
+
+  return volumeMap[value] ? `${volumeMap[value]} (${value})` : value;
+}
+
+function formatDefaultOptionLabel(value) {
+  return value;
 }
 
 function readOptionalValue(value) {
