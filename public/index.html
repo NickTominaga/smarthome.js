@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nature Remo Web Controller</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <style>
+        body {
+            font-size: .875rem;
+        }
+
+        .sidebar {
+            min-height: 100vh;
+            background-color: #f8f9fa;
+            border-right: 1px solid #dee2e6;
+        }
+
+        .sidebar .nav-link {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .sidebar .nav-link.active {
+            color: #0d6efd;
+        }
+
+        .app-main {
+            min-height: calc(100vh - 56px);
+        }
+
+        .buttons-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 8px;
+        }
+
+        .spinner-container {
+            position: relative;
+            min-height: 120px;
+        }
+
+        .overlay-spinner {
+            display: none;
+            position: absolute;
+            inset: 0;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.7);
+            z-index: 10;
+        }
+
+        .overlay-spinner.loading {
+            display: flex;
+        }
+
+        .appliance-card+.appliance-card {
+            margin-top: 12px;
+        }
+
+        @media (max-width: 767.98px) {
+            .sidebar {
+                min-height: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
+        <button class="navbar-toggler d-md-none collapsed ms-2" type="button" data-bs-toggle="collapse"
+            data-bs-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3 fs-6 d-flex align-items-center gap-2" href="#">
+            <i class="bi bi-house-gear-fill"></i>
+            <span>Nature Remo Controller</span>
+        </a>
+        <div class="w-100"></div>
+    </header>
+
+    <div class="container-fluid">
+        <div class="row">
+            <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+                <div class="position-sticky pt-3 sidebar-sticky">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link active" aria-current="page" href="#">
+                                <i class="bi bi-speedometer2 me-2"></i>
+                                ダッシュボード
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#tokenSettings">
+                                <i class="bi bi-key-fill me-2"></i>
+                                トークン設定
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#deviceControls">
+                                <i class="bi bi-toggles2 me-2"></i>
+                                家電操作
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4 app-main">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-2 pb-2 mb-3 border-bottom">
+                    <h1 class="h2 mb-0 d-flex align-items-center gap-2"><i class="bi bi-lightning-charge-fill"></i>Nature Remo Web Controller</h1>
+                </div>
+
+                <section id="tokenSettings" class="mb-4 d-grid gap-2">
+                    <p class="mb-0">
+                        <a href="https://home.nature.global/" target="_blank" rel="noopener noreferrer">home.nature.global</a>で作成した
+                        Nature API Access token を下に貼り付けてください。ただし、<b>共有PC</b>で使用した後は必ずクリアしておいてください（ブラウザに残っていると、他人に家電を操作されてしまいます）。
+                    </p>
+                    <label class="form-label" for="apiAccessToken"><i class="bi bi-shield-lock me-1"></i>Nature API Access token</label>
+                    <input id="apiAccessToken" class="form-control" type="password"
+                        placeholder="home.nature.global で作成した Nature API Access token を貼り付けてください">
+                    <button id="clearTokenBtn" class="btn btn-outline-secondary btn-sm align-self-start" type="button"><i class="bi bi-eraser me-1"></i>トークンをクリア</button>
+                    <p class="mb-0"><i class="bi bi-info-circle me-1"></i>エアコン・床暖・照明・TV・登録済みシグナルを含め、取得できる操作をすべて表示します。</p>
+                </section>
+
+                <section id="deviceControls" class="spinner-container">
+                    <div class="mb-3">
+                        <button id="scanBtn" class="btn btn-primary" type="button"><i class="bi bi-arrow-repeat me-1"></i>家電をスキャン</button>
+                    </div>
+
+                    <div id="userInfo" class="fw-bold mb-2"></div>
+                    <div id="appliancesList" class="outputs"></div>
+
+                    <div id="alert" class="alert alert-danger alert-dismissible fade" role="alert">
+                        <strong><i class="bi bi-exclamation-triangle-fill me-1"></i>エラー</strong>
+                        <div id="alertMsg"></div>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+
+                    <div id="spinner" class="overlay-spinner">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+        crossorigin="anonymous"></script>
+    <script type="module" src="./main.js"></script>
+</body>
+
+</html>
