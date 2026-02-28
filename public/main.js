@@ -1,4 +1,5 @@
 import { getClient } from "./nremo.js";
+import { getDemoClient } from "./demoClient.js";
 
 // localStorage キー
 const LS_ACCESS_TOKEN = "tool:natureapiaccesstoken";
@@ -6,18 +7,27 @@ const LS_ACCESS_TOKEN = "tool:natureapiaccesstoken";
 // 要素参照
 const tokenEl = document.getElementById("apiAccessToken");
 const clearTokenBtn = document.getElementById("clearTokenBtn");
+const demoModeBtn = document.getElementById("demoModeBtn");
 const scanBtn = document.getElementById("scanBtn");
 const spinner = document.getElementById("spinner");
 const alertEl = document.getElementById("alert");
 const alertMsg = document.getElementById("alertMsg");
+const demoBannerEl = document.getElementById("demoBanner");
 const appliancesEl = document.getElementById("appliancesList");
+const applianceNavListEl = document.getElementById("applianceNavList");
 const userInfoEl = document.getElementById("userInfo");
+
+let clientFactory = getClient;
+let isDemoMode = false;
 
 scanBtn.addEventListener("click", scanUserInfo);
 clearTokenBtn.addEventListener("click", clearToken);
+demoModeBtn.addEventListener("click", startDemoMode);
 
 tokenEl.addEventListener("input", () => {
-  displayUserInfo("", []);
+  if (!isDemoMode) {
+    displayUserInfo("", []);
+  }
   if (tokenEl.value.length > 0) {
     scanBtn.disabled = false;
   } else {
@@ -32,6 +42,14 @@ async function initialize() {
   scanBtn.disabled = true;
   setBusy(false);
   hideError();
+  hideDemoUi();
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("demo") === "1") {
+    await startDemoMode();
+    return;
+  }
+
   const savedToken = localStorage.getItem(LS_ACCESS_TOKEN);
   if (savedToken) {
     tokenEl.value = savedToken;
@@ -45,6 +63,23 @@ function clearToken() {
   scanBtn.disabled = true;
   displayUserInfo("", []);
   hideError();
+}
+
+async function startDemoMode() {
+  isDemoMode = true;
+  clientFactory = getDemoClient;
+  tokenEl.value = "DEMO_MODE_TOKEN";
+  scanBtn.disabled = false;
+  showDemoUi();
+  await scanUserInfo();
+}
+
+function showDemoUi() {
+  demoBannerEl.classList.remove("d-none");
+}
+
+function hideDemoUi() {
+  demoBannerEl.classList.add("d-none");
 }
 
 // UIヘルパ
@@ -80,11 +115,13 @@ function withSpinner(asyncFunc) {
 async function scanUserInfo() {
   const scan = async () => {
     const token = tokenEl.value.trim();
-    const client = getClient(token);
+    const client = isDemoMode ? clientFactory() : clientFactory(token);
     const nickname = await client.fetchMe();
     const appliances = await client.fetchAppliances();
     displayUserInfo(`${nickname}さん`, appliances);
-    localStorage.setItem(LS_ACCESS_TOKEN, token);
+    if (!isDemoMode) {
+      localStorage.setItem(LS_ACCESS_TOKEN, token);
+    }
   };
   await withSpinner(scan)();
 }
@@ -92,10 +129,11 @@ async function scanUserInfo() {
 function createApplianceCard(appliance) {
   const card = document.createElement("div");
   card.className = "card appliance-card";
+  card.id = appliance.anchorId;
 
   const header = document.createElement("div");
-  header.className = "card-header";
-  header.textContent = appliance.name;
+  header.className = "card-header d-flex align-items-center gap-2";
+  header.innerHTML = `<i class="bi ${getApplianceIconClass(appliance.type)}"></i><span>${escapeHtml(appliance.name)}</span>`;
 
   const body = document.createElement("div");
   body.className = "card-body d-grid gap-3";
@@ -121,9 +159,9 @@ function createApplianceCard(appliance) {
 
 function createButtonElement(button) {
   const buttonEl = document.createElement("button");
-  buttonEl.className = "btn btn-outline-primary";
+  buttonEl.className = "btn btn-outline-primary d-flex align-items-center justify-content-center gap-1";
   buttonEl.type = "button";
-  buttonEl.textContent = button.name;
+  buttonEl.innerHTML = `<i class="bi ${getButtonIconClass(button)}"></i><span>${escapeHtml(button.name)}</span>`;
   buttonEl.addEventListener("click", withSpinner(button.push));
   return buttonEl;
 }
@@ -134,22 +172,22 @@ function createAirconControl(aircon) {
 
   const title = document.createElement("div");
   title.className = "fw-semibold mb-2";
-  title.textContent = "エアコン操作";
+  title.innerHTML = '<i class="bi bi-wind me-1"></i>エアコン操作';
   wrapper.appendChild(title);
 
   const quickButtons = document.createElement("div");
   quickButtons.className = "d-flex gap-2 mb-3";
-  quickButtons.appendChild(createQuickActionButton("電源ON", aircon.powerOn));
-  quickButtons.appendChild(createQuickActionButton("電源OFF", aircon.powerOff));
+  quickButtons.appendChild(createQuickActionButton("電源ON", "bi-power", aircon.powerOn));
+  quickButtons.appendChild(createQuickActionButton("電源OFF", "bi-power", aircon.powerOff));
   wrapper.appendChild(quickButtons);
 
   const formRow = document.createElement("div");
   formRow.className = "row g-2";
 
-  const modeSelect = createSelectControl("運転モード", Object.keys(aircon.modes), aircon.defaultParams.mode);
-  const tempSelect = createSelectControl("温度", [], aircon.defaultParams.temp);
-  const volSelect = createSelectControl("風量", [], aircon.defaultParams.vol);
-  const dirSelect = createSelectControl("風向", [], aircon.defaultParams.dir);
+  const modeSelect = createSelectControl("運転モード", "bi-sliders", Object.keys(aircon.modes), aircon.defaultParams.mode);
+  const tempSelect = createSelectControl("温度", "bi-thermometer-half", [], aircon.defaultParams.temp);
+  const volSelect = createSelectControl("風量", "bi-fan", [], aircon.defaultParams.vol);
+  const dirSelect = createSelectControl("風向", "bi-arrow-down-up", [], aircon.defaultParams.dir);
 
   formRow.appendChild(modeSelect.group);
   formRow.appendChild(tempSelect.group);
@@ -172,7 +210,7 @@ function createAirconControl(aircon) {
   const applyBtn = document.createElement("button");
   applyBtn.type = "button";
   applyBtn.className = "btn btn-primary mt-3";
-  applyBtn.textContent = "エアコン設定を送信";
+  applyBtn.innerHTML = '<i class="bi bi-send-fill me-1"></i>エアコン設定を送信';
   applyBtn.addEventListener("click", withSpinner(async () => {
     await aircon.update({
       mode: modeSelect.select.value,
@@ -188,22 +226,22 @@ function createAirconControl(aircon) {
   return wrapper;
 }
 
-function createQuickActionButton(label, action) {
+function createQuickActionButton(label, iconClass, action) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "btn btn-outline-secondary btn-sm";
-  btn.textContent = label;
+  btn.innerHTML = `<i class="bi ${iconClass} me-1"></i>${escapeHtml(label)}`;
   btn.addEventListener("click", withSpinner(action));
   return btn;
 }
 
-function createSelectControl(label, options, selected) {
+function createSelectControl(label, iconClass, options, selected) {
   const group = document.createElement("div");
   group.className = "col-12 col-md-6 col-lg-3";
 
   const lbl = document.createElement("label");
   lbl.className = "form-label mb-1";
-  lbl.textContent = label;
+  lbl.innerHTML = `<i class="bi ${iconClass} me-1"></i>${escapeHtml(label)}`;
 
   const select = document.createElement("select");
   select.className = "form-select";
@@ -252,4 +290,53 @@ function displayUserInfo(userName, appliances) {
   appliances.forEach((appliance) => {
     appliancesEl.appendChild(createApplianceCard(appliance));
   });
+  renderApplianceSidebar(appliances);
+}
+
+function renderApplianceSidebar(appliances) {
+  applianceNavListEl.innerHTML = "";
+  appliances.forEach((appliance) => {
+    const item = document.createElement("li");
+    item.className = "nav-item";
+
+    const link = document.createElement("a");
+    link.className = "nav-link appliance-link";
+    link.href = `#${appliance.anchorId}`;
+    link.innerHTML = `<i class="bi ${getApplianceIconClass(appliance.type)} me-1"></i>${escapeHtml(appliance.shortName)}`;
+
+    item.appendChild(link);
+    applianceNavListEl.appendChild(item);
+  });
+}
+
+function getButtonIconClass(button) {
+  if (button.kind === "tv") {
+    return "bi-tv";
+  }
+  if (button.kind === "light") {
+    return "bi-lightbulb";
+  }
+  return "bi-play-circle";
+}
+
+function getApplianceIconClass(type) {
+  if (type === "TV") {
+    return "bi-tv";
+  }
+  if (type === "LIGHT") {
+    return "bi-lightbulb";
+  }
+  if (type === "AC") {
+    return "bi-wind";
+  }
+  return "bi-house-gear";
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }

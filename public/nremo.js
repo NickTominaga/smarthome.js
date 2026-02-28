@@ -19,6 +19,8 @@ async function getAppliances(api) {
 }
 
 function createAppliance(api, payload) {
+  const type = payload.type;
+  const shortName = payload.nickname;
   const name = payload.device
     ? `${payload.device.name} - ${payload.nickname} (${payload.type})`
     : `${payload.nickname} (${payload.type})`;
@@ -31,25 +33,32 @@ function createAppliance(api, payload) {
 
   const aircon = payload.aircon ? createAirconControl(api, applianceId, payload.aircon) : null;
 
-  return { name, buttons, aircon };
+  return {
+    name,
+    shortName,
+    type,
+    anchorId: `appliance-${applianceId}`,
+    buttons,
+    aircon,
+  };
 }
 
 function createSignalButton(api, signal) {
   const name = signal.name;
   const push = () => api.post(`1/signals/${signal.id}/send`, {});
-  return { name, push };
+  return { name, push, kind: "signal" };
 }
 
 function createLightButton(api, applianceId, button) {
   const name = button.label;
   const push = () => api.post(`1/appliances/${applianceId}/light`, `button=${button.name}`);
-  return { name, push };
+  return { name, push, kind: "light" };
 }
 
 function createTvButton(api, applianceId, button) {
   const name = button.label;
   const push = () => api.post(`1/appliances/${applianceId}/tv`, `button=${button.name}`);
-  return { name, push };
+  return { name, push, kind: "tv" };
 }
 
 function createAirconControl(api, applianceId, aircon) {
