@@ -14,6 +14,10 @@ if (typeof port !== "number") {
 
 app.use(express.static(publicDir));
 
+app.get("/demo", (_req, res) => {
+  res.redirect("/?demo=1");
+});
+
 app.get("*", (_req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });

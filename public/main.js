@@ -7,7 +7,6 @@ const LS_ACCESS_TOKEN = "tool:natureapiaccesstoken";
 // 要素参照
 const tokenEl = document.getElementById("apiAccessToken");
 const clearTokenBtn = document.getElementById("clearTokenBtn");
-const demoModeBtn = document.getElementById("demoModeBtn");
 const scanBtn = document.getElementById("scanBtn");
 const spinner = document.getElementById("spinner");
 const alertEl = document.getElementById("alert");
@@ -22,7 +21,6 @@ let isDemoMode = false;
 
 scanBtn.addEventListener("click", scanUserInfo);
 clearTokenBtn.addEventListener("click", clearToken);
-demoModeBtn.addEventListener("click", startDemoMode);
 
 tokenEl.addEventListener("input", () => {
   if (!isDemoMode) {
@@ -45,7 +43,8 @@ async function initialize() {
   hideDemoUi();
 
   const params = new URLSearchParams(window.location.search);
-  if (params.get("demo") === "1") {
+  const isDemoPath = window.location.pathname === "/demo";
+  if (isDemoPath || params.get("demo") === "1") {
     await startDemoMode();
     return;
   }
@@ -310,13 +309,99 @@ function renderApplianceSidebar(appliances) {
 }
 
 function getButtonIconClass(button) {
+  const name = (button.name ?? "").toLowerCase();
+
+  const nameIncludes = (patterns) => patterns.some((p) => name.includes(p));
+
+  if (nameIncludes(["power", "電源", "オン", "起動"])) {
+    return "bi-power";
+  }
+  if (nameIncludes(["停止", "off", "ストップ"])) {
+    return "bi-stop-circle";
+  }
+  if (nameIncludes(["再生", "play"])) {
+    return "bi-play-circle";
+  }
+  if (nameIncludes(["一時停止", "pause"])) {
+    return "bi-pause-circle";
+  }
+  if (nameIncludes(["録画", "record"])) {
+    return "bi-record-circle";
+  }
+  if (nameIncludes(["早送り", "fast", "ff"])) {
+    return "bi-fast-forward-circle";
+  }
+  if (nameIncludes(["早戻し", "rew", "巻き戻し"])) {
+    return "bi-rewind-circle";
+  }
+  if (nameIncludes(["次", "next"])) {
+    return "bi-skip-forward-circle";
+  }
+  if (nameIncludes(["前", "prev", "previous"])) {
+    return "bi-skip-backward-circle";
+  }
+  if (nameIncludes(["音量を上", "音量+", "vol+", "volume+"])) {
+    return "bi-volume-up";
+  }
+  if (nameIncludes(["音量を下", "音量-", "vol-", "volume-"])) {
+    return "bi-volume-down";
+  }
+  if (nameIncludes(["ミュート", "mute", "消音"])) {
+    return "bi-volume-mute";
+  }
+  if (nameIncludes(["ch", "チャンネル", "番組表", "地上波", "bs", "cs"])) {
+    return "bi-broadcast";
+  }
+  if (nameIncludes(["入力", "source", "入力切替"])) {
+    return "bi-box-arrow-in-right";
+  }
+  if (nameIncludes(["戻る", "back"])) {
+    return "bi-arrow-return-left";
+  }
+  if (nameIncludes(["ホーム", "home"])) {
+    return "bi-house";
+  }
+  if (nameIncludes(["上"])) {
+    return "bi-arrow-up-circle";
+  }
+  if (nameIncludes(["下"])) {
+    return "bi-arrow-down-circle";
+  }
+  if (nameIncludes(["左"])) {
+    return "bi-arrow-left-circle";
+  }
+  if (nameIncludes(["右"])) {
+    return "bi-arrow-right-circle";
+  }
+  if (nameIncludes(["決定", "ok", "enter"])) {
+    return "bi-check2-circle";
+  }
+  if (nameIncludes(["字幕"])) {
+    return "bi-badge-cc";
+  }
+  if (nameIncludes(["オプション", "menu"])) {
+    return "bi-list";
+  }
+  if (nameIncludes(["青"])) {
+    return "bi-circle-fill text-primary";
+  }
+  if (nameIncludes(["赤"])) {
+    return "bi-circle-fill text-danger";
+  }
+  if (nameIncludes(["緑"])) {
+    return "bi-circle-fill text-success";
+  }
+  if (nameIncludes(["黄"])) {
+    return "bi-circle-fill text-warning";
+  }
+
   if (button.kind === "tv") {
     return "bi-tv";
   }
   if (button.kind === "light") {
     return "bi-lightbulb";
   }
-  return "bi-play-circle";
+  return "bi-circle";
 }
 
 function getApplianceIconClass(type) {
